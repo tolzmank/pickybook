@@ -654,6 +654,79 @@ def get_story(story_id):
     return None
 
 
+def get_scaled_lengths(story_set):
+    """
+    Scales the lengths (plot length map) of overall story and each story block (control map) based on reading level.
+    Sets the unit of text to either 'paragraphs' or 'sentences' based on reading level. 
+        (Used for younger reading levels where blocks are less than a paragraph)
+    """
+    
+    reading_level = story_set['reading_level']
+    control = story_set['control']
+    length = story_set['length']
+    # Kindergarten
+    if reading_level == 'k':
+        plot_length_map = {
+            'quicky': 15,
+            'novella': 30,
+            'novel': 50,
+            'epic': 100
+        }
+        control_map = {
+            'low': 3,
+            'medium': 2,
+            'high': 1
+        }
+        text_unit = 'sentences'
+
+    # 1st Grade
+    elif reading_level == '1':
+        plot_length_map = {
+            'quicky': 30,
+            'novella': 50,
+            'novel': 80,
+            'epic': 150
+        }
+        control_map = {
+            'low': 5,
+            'medium': 3,
+            'high': 2
+        }
+        text_unit = 'sentences'
+
+    # 2nd Grade
+    elif reading_level == '2':
+        plot_length_map = {
+            'quicky': 50,
+            'novella': 100,
+            'novel': 150,
+            'epic': 300
+        }
+        control_map = {
+            'low': 10,
+            'medium': 5,
+            'high': 3
+        }
+        text_unit = 'sentences'
+    else:
+        plot_length_map = {
+            'quicky': 20,
+            'novella': 100,
+            'novel': 500,
+            'epic': 1000
+        }
+        control_map = {
+            'low': 8,
+            'medium': 4,
+            'high': 1
+        }
+        text_unit = 'paragraphs'
+
+    total_blocks = plot_length_map.get(length)
+    num_text_per_block = control_map.get(control)
+    return total_blocks, num_text_per_block, text_unit
+
+
 def map_user_set(story_set):
     """ Map user selections to specific prompt friendly variables """
     # Genre
@@ -678,22 +751,7 @@ def map_user_set(story_set):
     }
     vibe_mood = vibe_mood_map.get(story_set['vibe_mood'], 'Default vibe mood')
 
-    # Overall length map (total paragraphs for story)
-    plot_length_map = {
-        'quicky': 20,
-        'novella': 100,
-        'novel': 500,
-        'epic': 1000
-    }
-    total_blocks = plot_length_map.get(story_set['length'])
-
-    # Control map (paragraphs per block "user decision")
-    control_map = {
-        'low': 8,
-        'medium': 4,
-        'high': 2
-    }
-    num_paragraphs_per_block = control_map.get(story_set['control'])
+    total_blocks, num_text_per_block, text_unit = get_scaled_lengths(story_set)
 
     # Moral lesson
     moral_lesson_map = {
@@ -771,11 +829,12 @@ def map_user_set(story_set):
         'main_character': main_character,
         'vibe_mood': vibe_mood,
         'length': total_blocks,
-        'control': num_paragraphs_per_block,
+        'control': num_text_per_block,
         'moral_lesson': moral_lesson,
         'reader_age': reader_age,
         'reading_level': reading_level,
-        'educational': educational
+        'educational': educational,
+        'text_unit': text_unit
     }
     return user_set
 
@@ -792,12 +851,13 @@ def get_next_story_block(story_set, choice=None):
     genre = user_set['genre']
     main_character = user_set['main_character']
     vibe_mood = user_set['vibe_mood']
-    total_paragraphs = user_set['length']
-    paragraphs_per_block = user_set['control']
+    total_length = user_set['length']
+    text_per_block = user_set['control']
     moral_lesson = user_set['moral_lesson']
     reader_age = user_set['reader_age']
     reading_level = user_set['reading_level']
     educational = user_set['educational']
+    text_unit = user_set['text_unit']
 
     plot_blocks = story_set.get('story')
     if plot_blocks:
@@ -805,18 +865,18 @@ def get_next_story_block(story_set, choice=None):
         summary = story_set['story'][-1]['summary']
         user_choice = choice.get('decision')
 
-        paragraphs_used = len(story_set['story']) * paragraphs_per_block
-        paragraphs_remaining = total_paragraphs - paragraphs_used
-        if paragraphs_remaining <= paragraphs_per_block:
+        text_used = len(story_set['story']) * text_per_block
+        text_remaining = total_length - text_used
+        if text_remaining <= text_per_block:
             # Last plot block, wrap up story, no more choices
             prompt = f"""
-            You are writing the last {paragraphs_remaining} paragraphs of the conclusion of a story. 
+            You are writing the last {text_remaining} {text_unit} of the conclusion of a story. 
 
-            Write the last part of the story ({paragraphs_per_block} paragraphs), continuing naturally from the reader's choice.
+            Write the last part of the story ({text_per_block} {text_unit}), continuing naturally from the reader's choice.
             Let the reader's choice guide the continuation of the next part of the story you are writing now.
-            But for now, the next section of the story, which should be {paragraphs_per_block} paragraphs.
-            Currently, the story's length is {len(plot_blocks) * paragraphs_per_block} paragraphs long.
-            So as the story is now, the story is { ((len(plot_blocks) * paragraphs_per_block) / total_paragraphs) * 100 }% of the way complete.
+            But for now, the next section of the story, which should be {text_per_block} {text_unit}.
+            Currently, the story's length is {len(plot_blocks) * text_per_block} {text_unit} long.
+            So as the story is now, the story is { ((len(plot_blocks) * text_per_block) / total_length) * 100 }% of the way complete.
             This section of the story you write should resolve the absolute final conclusion of the story.
         
             Here is a story summary so far:
@@ -835,7 +895,7 @@ def get_next_story_block(story_set, choice=None):
             Only put an empty string for the values in each decision key in the JSON object, as shown below):
 
             {{
-            "text": "Next {paragraphs_per_block} paragraph story content...",
+            "text": "Next {text_per_block} {text_unit} story content...",
             "choices": [
                 {{"decision": "", "next": 3}},
                 {{"decision": "", "next": 4}}
@@ -847,14 +907,14 @@ def get_next_story_block(story_set, choice=None):
         else:
             # Continue story development for next plot block
             prompt = f"""
-            You are continuing the next {paragraphs_per_block} paragraphs of a story.
+            You are continuing the next {text_per_block} {text_unit} of a story.
 
             This story will be built in sections. 
-            So the overall length of this story when completed should total to {total_paragraphs} paragraphs.
-            But for now, write the next section of the story, which should be {paragraphs_per_block} paragraphs.
-            Currently, the story's length is {len(plot_blocks) * paragraphs_per_block} paragraphs long. The total length of the story when it's done will need to be {total_paragraphs}.
-            So as the story is now, the story is { ((len(plot_blocks) * paragraphs_per_block) / total_paragraphs) * 100 }% of the way complete.
-            So, based on where the plot's current phase is (intro, arc, or conclusion), the next section you will write needs to reflect the current phase of the story, while progressing the plot based on the percentage of the story's progress, keeping in mind the total paragraph limit for the story.
+            So the overall length of this story when completed should total to {total_length} {text_unit}.
+            But for now, write the next section of the story, which should be {text_per_block} {text_unit}.
+            Currently, the story's length is {len(plot_blocks) * text_per_block} {text_unit} long. The total length of the story when it's done will need to be {total_length}.
+            So as the story is now, the story is { ((len(plot_blocks) * text_per_block) / total_length) * 100 }% of the way complete.
+            So, based on where the plot's current phase is (intro, arc, or conclusion), the next section you will write needs to reflect the current phase of the story, while progressing the plot based on the percentage of the story's progress, keeping in mind the total {text_unit} limit for the story.
 
             Here is a story summary so far:
             \"{summary}\"
@@ -865,13 +925,13 @@ def get_next_story_block(story_set, choice=None):
             The reader chose to:
             \"{user_choice}\"
 
-            Write the next part of the story ({paragraphs_per_block} paragraphs), continuing naturally from the reader's choice.
-            This block should reflect the current arc: build tension toward the climax. The final conclusion should resolve within the last {paragraphs_per_block} paragraphs.
+            Write the next part of the story ({text_per_block} {text_unit}), continuing naturally from the reader's choice.
+            This block should reflect the current arc: build tension toward the climax. The final conclusion should resolve within the last {text_per_block} {text_unit}.
 
             Important:
-            - The total length of this story should be about {total_paragraphs} paragraphs total.
-            - You have already used approximately {paragraphs_used} paragraphs.
-            - That means you have ~{paragraphs_remaining} paragraphs left to wrap up the full arc.
+            - The total length of this story should be about {total_length} {text_unit} total.
+            - You have already used approximately {text_used} {text_unit}.
+            - That means you have ~{text_remaining} {text_unit} left to wrap up the full arc.
             - Plan the pacing and narrative arcs accordingly — don’t stall or wrap up too fast.
 
             """.strip()
@@ -879,12 +939,12 @@ def get_next_story_block(story_set, choice=None):
     else:
         # Initial story creation, first plot block
         prompt = f"""
-        Write the opening of the story, which should be {paragraphs_per_block} paragraphs.
+        Write the opening of the story, which should be {text_per_block} {text_unit}.
 
         This story will be built in sections, like a choose your own adventure style book. 
-        So the overall length of this story when completed should total to {total_paragraphs} paragraphs.
+        So the overall length of this story when completed should total to {total_length} {text_unit}.
         But for now, only write the opening of the story, 
-        But keep in mind the overall story intro, arc, and conclusion in the future will still be limited to {total_paragraphs} So ensure the plot structure follows this pace.
+        But keep in mind the overall story intro, arc, and conclusion in the future will still be limited to {total_length} So ensure the plot structure follows this pace.
 
         """.strip()
 
@@ -909,7 +969,7 @@ def get_next_story_block(story_set, choice=None):
         - For the summary: Think: “From the very beginning of the tale through the end of this block, what is the one‐paragraph full plot arc?” Do **not** summarize only the paragraphs you just wrote—summarize the entire arc so far.  
 
         {{
-        "text": "Your story content here in {paragraphs_per_block} paragraphs...",
+        "text": "Your story content here in {text_per_block} {text_unit}...",
         "choices": [
             {{"decision": "Choice A", "next": 1}},
             {{"decision": "Choice B", "next": 2}}
@@ -955,8 +1015,8 @@ def get_visual_description_anchor(full_text):
     prompt = f"""
     Analyze this first story block:
     \"\"\"{full_text}\"\"\"
-    Based on the main character and important visual elements such as accessories or other characters, create a single, clear, short visual description that can be reused for every illustration in the book to keep characters and details consistent.
-    Include important details about the main character and any other characters like age, sex/gender, race/nationality, hair color, and eye color.
+    Based on the main character and important visual elements such as accessories or other characters or sidekicks, create a single, clear, short visual description that can be reused for every illustration in the book to keep characters and details consistent.
+    Include important details about the main character and any other characters like age, height, sex/gender, skin color, hair color, hair style/length, and eye color. 
     """
     try:
         response = openai_client.chat.completions.create(

@@ -470,18 +470,15 @@
   // Restore scroll position after reload
   window.addEventListener('load', () => {
     const savedPosition = localStorage.getItem('scrollPosition');
-    if (savedPosition) {
-      const loadingElement = document.querySelector('.local-loading');
-      const extraOffset = loadingElement ? loadingElement.offsetHeight : 0;
-      const fixedExtra = 100; // adjust if needed
-      window.scrollTo({
-        top: parseInt(savedPosition) + extraOffset + fixedExtra,
-        behavior: 'smooth'
-      });
+    const images = document.querySelectorAll('.reader-container img');
+
+    if (savedPosition && images.length > 0) {
+      const lastImage = images[images.length - 1];
+      lastImage.scrollIntoView({ behavior: 'auto', block: 'start' });
     } else if (scrollOnLoad) {
-      // only when loading a saved story
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
+
     localStorage.removeItem('scrollPosition');
   });
 </script>
