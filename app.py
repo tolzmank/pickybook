@@ -425,7 +425,9 @@ def create_story():
     # Get image for story block, add to story block
     story_block = story_set['story'][-1]
     plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'])
-    story_block['image_url'] = get_book_picture(plot_block_summary, story_id)
+    visual_desc_anchor = get_visual_description_anchor(story_block['text'])
+    story_set['visual_desc'] = visual_desc_anchor
+    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor)
     update_story_db(story_id, story_set)
 
     session['story_id'] = story_id
@@ -514,7 +516,8 @@ def choose_path():
     # Get image for story block
     story_block = story_set['story'][-1]
     plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'])
-    story_block['image_url'] = get_book_picture(plot_block_summary, story_id)
+    visual_desc_anchor = story_set['visual_desc']
+    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor)
 
     update_story_db(story_id, story_set)
     return redirect(url_for('index'))
@@ -526,6 +529,7 @@ def update_story_db(story_id, story_set):
     entity = ds_client.get(key)
     if entity:
         entity['story'] = json.dumps(story_set['story'])
+        entity['visual_desc'] = story_set['visual_desc']
         entity['last_modified'] = datetime.now(timezone.utc)
         try:
             ds_client.put(entity)
@@ -533,7 +537,6 @@ def update_story_db(story_id, story_set):
             print("Datastore save failed:", e)
             flash("Something went wrong saving your story. Please try again.")
         print('Story updated with ID:', story_id)
-        logging.info('Story updated with ID:', story_id)
 
 
 @app.route('/start_over', methods=['POST'])
@@ -643,6 +646,7 @@ def get_story(story_id):
             'reading_level': entity.get('reading_level'),
             'educational': entity.get('educational'),
             'story': json.loads(entity.get('story', '[]')),
+            'visual_desc': entity.get('visual_desc'),
             'created_at': entity.get('created_at'),
             'last_modified': entity.get('last_modified')
         }
@@ -947,6 +951,29 @@ def get_next_story_block(story_set, choice=None):
     return story_set
 
 
+def get_visual_description_anchor(full_text):
+    prompt = f"""
+    Analyze this first story block:
+    \"\"\"{full_text}\"\"\"
+    Based on the main character and important visual elements such as accessories or other characters, create a single, clear, short visual description that can be reused for every illustration in the book to keep characters and details consistent.
+    Include important details about the main character and any other characters like age, sex/gender, race/nationality, hair color, and eye color.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You create reusable visual description anchors for children's book illustrations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        visual_desc = response.choices[0].message.content.strip()
+        return visual_desc
+    except Exception as e:
+        print('Could not get visual description anchor: >>>>>>>> ', e)
+        return ''
+
+
 def get_image_prompt_summary(plot_summary, text_block: str):
     print('Prompting for image...')
     logging.info('Prompting for image')
@@ -976,19 +1003,31 @@ def get_image_prompt_summary(plot_summary, text_block: str):
     return summary_text
 
 
-def get_book_picture(image_prompt: str, story_id):
+def get_book_picture(image_prompt: str, story_id, visual_description):
     """
     Receives summary of story block as an image prompt format
     Returns a url of the location of the stored image on Google Cloud Bucket
     """
     print('Creating book illustration...')
     logging.info('Creating book illustration...')
-
+    print()
+    print('IMAGE PROMPT: ', image_prompt)
+    print()
+    print('VISUAL DESC: ', visual_description)
+    print()
     # Send prompt for image
     try:
         image_response = openai_client.images.generate(
             model="dall-e-3",
-            prompt=f"A colorful, kid-friendly children's book illustration: {image_prompt}. Do not include any text within the image itself.",
+            prompt=f"""
+            Visual anchor (always use):
+            \"{visual_description}\"
+
+            Scene to illustrate:
+            A watercolor style, cartoon, colorful, kid-friendly children's book illustration: {image_prompt}.
+
+            Combine both: The final illustration must match the anchor details and bring the scene to life.
+            """,
             n=1,
             size="1024x1024"
         )
