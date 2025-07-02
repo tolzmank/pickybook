@@ -1,0 +1,6 @@
+indexes:
+- kind: Story
+  properties:
+    - name: user
+    - name: created_at
+      direction: desc

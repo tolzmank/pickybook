@@ -1,0 +1,20 @@
+# Always ignore version control
+.git/
+__pycache__/
+
+# Ignore secrets
+.env
+pickybook-firebase-adminsdk-fbsvc-a4c8869ee0.json
+pickybook-key.json
+
+# Ignore scratch and test files
+scratch1.py
+scratch2.py
+scratch3.py
+hold_code.py
+tests/
+backups/
+
+# Ignore editor folders
+.vscode/
+.idea/

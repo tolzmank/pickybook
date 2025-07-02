@@ -1,0 +1,12 @@
+Flask==3.0.0
+
+requests
+openai
+
+gunicorn==20.1.0
+google-cloud-datastore==2.5.0
+protobuf==3.20.1
+firebase-admin
+pytz
+google-cloud-secret-manager
+python-dotenv

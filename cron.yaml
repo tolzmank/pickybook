@@ -1,0 +1,4 @@
+cron:
+- description: cleanup anonymous stories
+  url: /cron/cleanup_anonymous
+  schedule: every 24 hours

@@ -1,0 +1,709 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PickyBook</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/elephant_picky.png') }}">
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
+
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400&display=swap" rel="stylesheet">
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Only auto-scroll when coming from My Stories (read_story)
+    const scrollOnLoad = {{ scroll_on_load | default(false) | tojson }};
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+
+<body>
+
+  <!-- Title Block -->
+<div class="head-container" style="display: flex; align-items: center; gap: 10px;">
+  <img src="{{ url_for('static', filename='images/elephant_picky.png') }}" alt="Picky Elephant" style="height: 100%; max-height: 150px; border-top-left-radius: 20px; border-bottom-left-radius: 20px;">
+  <div>
+    <h1>PickyBook</h1>
+    <h2>Big stories for little pickers</h2>
+  </div>
+</div>
+
+
+<!-- Menu Bar -->
+<div class="menu-container" style="display: flex; justify-content: center; align-items: center; padding: 10px 0;">
+  {% if not user %}
+  <button class="button-menu" onclick="location.href='/show_login'" title="Log in or create your account">Login / Create Account</button>
+  {% else %}
+  <button class="button-menu" style="margin-right: 10px;" onclick="location.href='/show_create_story_page'" title="Start creating a new story">Create</button>
+  <button class="button-menu" style="margin-right: 10px;" onclick="location.href='/my_stories'" title="View all stories you've created">My Stories</button>
+  <button class="button-menu" style="margin-right: 10px;" onclick="location.href='/account_settings'" title="Update your account preferences">Account</button>
+
+  {% if user_profile %}<p style="margin-right: 10px; margin-top: 0px; margin-bottom: 0px;">{{user_profile['name']}}</p>{% endif %}
+  <img src="{{ url_for('static', filename='images/elephant_head.png') }}" alt="Flirty Smiley" style="height: 100%; max-height: 22px;">
+  {% endif %}
+</div>
+
+<!-- Flash messages for user feedback -->
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div class="menu-container" style="padding: 2px;">
+      {% for message in messages %}
+        <p style="text-align: center;">{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<!-- Login/create account form -->
+{% if show_login %}
+<div class="menu-container" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px 0;">
+  <h2>Login or Create Account</h2>
+  {% if not show_create_account %}
+  <input class="bubble-input" style="margin-top: 10px;" type="email" id="email" placeholder="Email" required /><br>
+  <input class="bubble-input" style="margin-top: 10px;" type="password" id="password" placeholder="Password" required /><br>
+  <button class="button" style="margin-top: 10px;" onclick="signIn()">Login</button>
+  <button class="button-menu" style="margin-top: 10px;" onclick="googleSignIn()">Sign in with Google</button>
+  <button class="button-menu" style="margin-top: 10px;" onclick="location.href='/show_create_account'">Create Account</button><br>
+  {% else %}
+  <label for="name" style="margin-top: 10px;">Name</label>
+  <input class="bubble-input" style="margin-top: 10px;" type="text" id="sign_name" placeholder="Name" required /><br>
+  <label for="birthdate">Birthdate</label>
+  <input class="bubble-input" style="margin-top: 10px;" type="date" id="sign_birthdate" placeholder="Birthdate" required /><br>
+  <label for="email">Email</label>
+  <input class="bubble-input" style="margin-top: 10px;" type="email" id="email" placeholder="Email" required /><br>
+  <label for="password">Set Password</label>
+  <input class="bubble-input" style="margin-top: 10px;" type="password" id="password" placeholder="Password" required /><br>
+  <label for="confirm_password">Confirm Password</label>
+  <input class="bubble-input" style="margin-top: 10px;" type="password" id="confirm_password" placeholder="Confirm Password" required /><br>
+  <button class="button" style="margin-top: 10px;" onclick="signUp()">Create Account</button><br>
+  <button class="button-menu" style="margin-top: 0px; margin-bottom: 20px;" onclick="location.href='/hide_create_account'" title="Hide Login Form">Login</button>
+  {% endif %}
+
+  <button class="button-menu" style="margin-top: 10px;" onclick="location.href='/hide_login'" title="Hide Login Form">Cancel</button>
+  <p id="auth-message"></p>
+</div>
+{% endif %}
+
+
+<!-- Show Account Settings Page -->
+ {% if show_account %}
+  {% if user_details %}
+  <div class="menu-container" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px 0;">
+    <button class="button-gray-trans" style="margin-bottom: 30px;" type="button" id="toggle-theme" title="Toggle Light/Dark Theme">
+      <img src="{{ url_for('static', filename='icons/theme_toggle.svg') }}" alt="Toggle Theme" style="height: 30px;">
+      Dark/Light Theme
+    </button>
+    <form method="POST" action="/update_account" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+      <label for="name">Name</label>
+      <input class="bubble-input" style="margin-top: 5px;" type="text" id="name" placeholder="Name" name="name" value="{{ user_profile.name or '' }}"><br>
+      
+      <label for="birthdate">Birthdate</label>
+      <input class="bubble-input" style="width: 100%; margin-top: 5px;" type="date" id="birthdate" name="birthdate" value="{{ user_profile.birthdate or '' }}"><br>
+
+      <label for="reading_level">Default Reading Level</label>
+      <select class="bubble-input" style="width: 100%; margin-top: 5px;" name="reading_level">
+        <option value="" disabled selected required>Select</option>
+        <option value="k" {% if reading_level == 'k' %}selected{% endif %}>Kindergarten</option>
+        <option value="1" {% if reading_level == '1' %}selected{% endif %}>1st Grade</option>
+        <option value="2" {% if reading_level == '2' %}selected{% endif %}>2nd Grade</option>
+        <option value="3" {% if reading_level == '3' %}selected{% endif %}>3rd Grade</option>
+        <option value="4" {% if reading_level == '4' %}selected{% endif %}>4th Grade</option>
+        <option value="5" {% if reading_level == '5' %}selected{% endif %}>5th Grade</option>
+        <option value="6" {% if reading_level == '6' %}selected{% endif %}>6th Grade</option>
+        <option value="7" {% if reading_level == '7' %}selected{% endif %}>7th Grade</option>
+        <option value="8" {% if reading_level == '8' %}selected{% endif %}>8th Grade</option>
+        <option value="9" {% if reading_level == '9' %}selected{% endif %}>9th Grade</option>
+        <option value="10" {% if reading_level == '10' %}selected{% endif %}>10th Grade</option>
+        <option value="11" {% if reading_level == '11' %}selected{% endif %}>11th Grade</option>
+        <option value="12" {% if reading_level == '12' %}selected{% endif %}>12th Grade</option>
+      </select><br>
+
+      <label for="user_email">Email</label>
+      <input class="bubble-input" style="margin-top: 5px;" type="text" id="user_email" name="user_email" value="{{ user_details.email or '' }}" readonly/><br>
+      
+      <button type="submit" class="button" style="margin-top: 10px;">
+        Update Account Info
+      </button>
+    </form>
+
+    <button class="button-gray" style="margin-top: 10px;" onclick="location.href='/session_logout'" title="Logout">Logout</button>
+    
+    <form method="POST" action="/delete_account" onsubmit="return confirm('Are you sure you want to delete your Account? This cannot be undone.');" style="display:inline;">
+      <button type="submit" class="button-gray" style="margin-top: 30px;">
+        Delete Account
+      </button>
+    </form>
+  </div>
+  {% endif %}
+ {% endif %}
+
+
+<!-- My Stories Display -->
+{% if show_stories %}
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Last Modified</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if user_stories %}
+        {% for story_set in user_stories %}
+          <tr>
+            <td><a href="/read_story/{{ story_set.key.id }}">{{ story_set['title'] }}</a></td>
+            <td>{{ story_set['last_modified'].strftime('%b %d, %Y at %I:%M %p') }}</td>
+            <td>
+              <form method="POST" action="/delete_story/{{ story_set.key.id }}" onsubmit="return confirm('Are you sure you want to delete this story?');" style="display:inline;">
+                <button type="submit" class="delete-button" title="Delete story">
+                  <img src="{{ url_for('static', filename='icons/delete.svg') }}" alt="Delete" class="delete-icon" />
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td>No stories yet</td>
+          <td></td>
+          <td></td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+{% endif %}
+
+
+<!-- Story Settings Form -->
+{% if show_create %}
+<div class="container">
+<form method="POST" action="/create_story">
+  <table>
+    <thead>
+      <tr>
+        <th class="no-sort">Make the Story Yours</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding-top: 20px;">What kind of story do you want today?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="genre" title="Select the kind of story you want.">
+            <option value="" disabled selected required>Select</option>
+            <option value="fantasy">Fantasy</option>
+            <option value="adventure">Adventure</option>
+            <option value="mystery">Mystery</option>
+            <option value="sci_fi">Science Fiction</option>
+            <option value="animal_story">Animal Story</option>
+            <option value="fairy_tale">Fairy Tale</option>
+            <option value="historical">Historical</option>
+          </select>
+        </td>
+      </tr>
+      
+      <tr><td style="padding-top: 20px;">Who’s the main character of your story?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="main_character" title="Choose your main character">
+            <option value="" disabled selected required>Select</option>
+            {% if user_profile and user_profile.name %}
+              <option value="me">{{ user_profile.name }}</option>
+            {% endif %}
+            <option value="explorer">Explorer</option>
+            <option value="detective">Detective</option>
+            <option value="superhero">Superhero</option>
+            <option value="talking_animal">Talking Animal</option>
+            <option value="inventor">Inventor</option>
+            <option value="everyday_hero">Everyday Hero</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr><td style="padding-top: 20px;">What feeling do you want your story to have?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="vibe_mood" title="Pick a feeling for your story">
+            <option value="" disabled selected required>Select</option>
+            <option value="silly_funny">Silly & Funny</option>
+            <option value="heartwarming">Heartwarming & Sweet</option>
+            <option value="inspirational">Inspirational</option>
+            <option value="calm_relaxing">Calm & Relaxing</option>
+            <option value="exciting_adventure">Exciting Adventure</option>
+          </select>
+        </td>
+      </tr>
+  
+      <tr><td style="padding-top: 20px;">How long should your story be?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="length" title="Pick the overall length of your story">
+            <option value="" disabled selected required>Select</option>
+            <option value="quicky">Tiny Tale</option>
+            <option value="novella">Medium Story</option>
+            <option value="novel">Long Adventure</option>
+            <option value="epic">Epic Quest</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr><td style="padding-top: 20px;">How many choices do you want to make?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="control" title="How hands-on do you want to be with the story? Mostly sit back or taking full control?">
+            <option value="" disabled selected required>Select</option>
+            <option value="low">Just a Few</option>
+            <option value="medium">Some Choices</option>
+            <option value="high">Lots of Choices!</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr><td style="padding-top: 20px;">What lesson will your story teach?</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="moral_lesson" title="Pick a moral lesson for your story">
+            <option value="" selected required>None</option>
+            <option value="bravery">Bravery</option>
+            <option value="kindness">Kindness</option>
+            <option value="never_give_up">Never Give Up</option>
+            <option value="friendship">Friendship</option>
+            <option value="family">Family</option>
+            <option value="teamwork">Teamwork</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr><td style="padding-top: 20px;">Reader Age</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="reader_age" title="Pick the age level of the reader">
+            <option value="" disabled selected required>Select</option>
+            <option value="under5" {% if user_age and user_age < 5 %}selected{% endif %}>Under 5</option>
+            <option value="5" {% if user_age == 5 %}selected{% endif %}>5</option>
+            <option value="6" {% if user_age == 6 %}selected{% endif %}>6</option>
+            <option value="7" {% if user_age == 7 %}selected{% endif %}>7</option>
+            <option value="8" {% if user_age == 8 %}selected{% endif %}>8</option>
+            <option value="9" {% if user_age == 9 %}selected{% endif %}>9</option>
+            <option value="10" {% if user_age == 10 %}selected{% endif %}>10</option>
+            <option value="11" {% if user_age == 11 %}selected{% endif %}>11</option>
+            <option value="12" {% if user_age == 12 %}selected{% endif %}>12</option>
+            <option value="13" {% if user_age == 13 %}selected{% endif %}>13</option>
+            <option value="14plus" {% if user_age and user_age > 13 %}selected{% endif %}>14+</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr><td style="padding-top: 20px;">Reading Level</td></tr>
+      <tr>
+        <td>
+          <select class="bubble-input" name="reading_level" title="Pick the reading level of the reader">
+            <option value="" disabled selected required>Select</option>
+            <option value="k" {% if reading_level == 'k' %}selected{% endif %}>Kindergarten</option>
+            <option value="1" {% if reading_level == '1' %}selected{% endif %}>1st Grade</option>
+            <option value="2" {% if reading_level == '2' %}selected{% endif %}>2nd Grade</option>
+            <option value="3" {% if reading_level == '3' %}selected{% endif %}>3rd Grade</option>
+            <option value="4" {% if reading_level == '4' %}selected{% endif %}>4th Grade</option>
+            <option value="5" {% if reading_level == '5' %}selected{% endif %}>5th Grade</option>
+            <option value="6" {% if reading_level == '6' %}selected{% endif %}>6th Grade</option>
+            <option value="7" {% if reading_level == '7' %}selected{% endif %}>7th Grade</option>
+            <option value="8" {% if reading_level == '8' %}selected{% endif %}>8th Grade</option>
+            <option value="9" {% if reading_level == '9' %}selected{% endif %}>9th Grade</option>
+            <option value="10" {% if reading_level == '10' %}selected{% endif %}>10th Grade</option>
+            <option value="11" {% if reading_level == '11' %}selected{% endif %}>11th Grade</option>
+            <option value="12" {% if reading_level == '12' %}selected{% endif %}>12th Grade</option>
+          </select>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="padding-top: 20px;">
+          <label><input type="checkbox" name="educational" value="true" checked> Educational</label>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="padding-bottom: 20px;"><button class="button" type="submit" style="margin-top: 10px;">Start Adventure</button></td>
+      </tr>
+    </tbody>
+  </table>
+</form>
+{% if not user %}
+      <div style="text-align: center; margin-top: 20px;">
+      <button class="button-gray" style="background-color: transparent; color: #7f7f7f; padding-left: 20px; margin-bottom: 10px;" onclick="location.href='/show_login'" title="Login or create an account to save your stories">Login or create an account to save your stories</button>
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
+
+{% if story_set %}
+<!-- Story Reader -->
+<div class="reader-container" style="padding-bottom: 5px;">
+  <!-- Text appearance controls -->
+  <div id="text-controls" style="display:flex; gap:8px; justify-content:center; margin-bottom:12px;">
+    <button id="decrease-font" class="button-gray-trans" type="button" title="Smaller Text">
+      <img src="{{ url_for('static', filename='icons/text_size_decrease.svg') }}" alt="Decrease Text Size" style="height: 20px;">
+    </button>
+
+    <button id="increase-font" class="button-gray-trans" type="button" title="Larger Text">
+      <img src="{{ url_for('static', filename='icons/text_size_increase.svg') }}" alt="Increase Text Size" style="height: 20px;">
+    </button>
+    <button id="decrease-spacing" class="button-gray-trans" type="button" title="Decrease Line Spacing">
+      <img src="{{ url_for('static', filename='icons/density_increase.svg') }}" alt="Decrease Line Spacing" style="height: 20px;">
+    </button>
+    <button id="increase-spacing" class="button-gray-trans" type="button" title="Increase Line Spacing">
+      <img src="{{ url_for('static', filename='icons/density_decrease.svg') }}" alt="Increase Line Spacing" style="height: 20px;">
+    </button>
+    <button class="button-gray-trans" type="button" id="toggle-theme" title="Toggle Light/Dark Theme">
+      <img src="{{ url_for('static', filename='icons/theme_toggle.svg') }}" alt="Toggle Theme" style="height: 20px;">
+    </button>
+  </div>
+
+  <!-- Plot Blocks Read Display -->
+  <p style="font-weight:700; text-align: center;">{{ story_set['title'] }}</p>
+  {% for plot_block in story_set['story'] %}
+  <!-- Story Illustration -->
+  {% if plot_block.get('image_url') %}
+    <img src="{{ plot_block['image_url'] }}" alt="Story Illustration"
+       style="display: block; max-width: 100%; height: auto; border-radius: 12px; margin: 20px auto;">
+  {% endif %}
+  
+  <!-- Plot Text-->
+  <p>{{plot_block['text']}}</p>
+  {% if loop.last %}
+    {% if plot_block['choices'][0]['decision'] %}
+      <div class="decision-row">
+        <form method="POST" action="/choose_path">
+          <input type="hidden" name="decision" value="{{plot_block['choices'][0]['decision']}}">
+          <input type="hidden" name="next" value="{{plot_block['choices'][0]['next']}}">
+          <button class="decision-button" style="margin-bottom: 15px;" type="submit">{{plot_block['choices'][0]['decision']}}</button>
+        </form>
+        <form method="POST" action="/choose_path">
+          <input type="hidden" name="decision" value="{{plot_block['choices'][1]['decision']}}">
+          <input type="hidden" name="next" value="{{plot_block['choices'][1]['next']}}">
+          <button class="decision-button" style="margin-bottom: 15px;" type="submit">{{plot_block['choices'][1]['decision']}}</button>
+        </form>
+      </div>
+    {% else %}
+    <p style="font-weight:700; text-align: center;">The End</p>
+    {% endif %}
+  {% endif %}
+    
+  {% endfor %}
+  {% if not user %}
+    <div style="text-align: center; margin-top: 20px;">
+      <button class="button-gray" style="background-color: transparent; color: #7f7f7f; padding-left: 20px; margin-bottom: 10px;" onclick="location.href='/show_login'" title="Login or create an account to save your stories">Login or create an account to save your stories</button>
+    </div>
+  {% endif %}
+</div>
+
+
+<!-- Story Navigation Buttons -->
+<div class="decision-row">
+  <form method="POST" action="/go_back">
+    <button class="button-gray" type="submit" title="Go back one step in your story">
+      <img src="{{ url_for('static', filename='icons/back.svg') }}" alt="Go Back" style="height: 30px;">
+    </button>
+  </form>
+  <form method="POST" action="/start_over">
+    <button class="button-gray" type="submit" title="Restart from the beginning with the same setup">
+      <img src="{{ url_for('static', filename='icons/start_over.svg') }}" alt="Start Over" style="height: 30px;">
+    </button>
+  </form>
+  <form method="POST" action="/reset">
+    <button class="button-gray" type="submit" title="Clear everything and begin a brand new story">
+      <img src="{{ url_for('static', filename='icons/close.svg') }}" alt="Reset" style="height: 30px;">
+    </button>
+  </form>
+</div>
+{% endif %}
+
+
+<!-- Loading screen animation -->
+<div id="loading-overlay" style="display:none;">
+  <div class="loading-spinner"></div>
+  <p style="color: #ffffff; font-family: 'Quicksand', sans-serif; margin-top: 20px;">Creating your story...</p>
+</div>
+
+
+<!-- Padding for bottom of screen -->
+<div style="height: 100px;"></div>
+
+
+<!-- Scroll position restore and loading animation script -->
+<script>
+  const forms = document.querySelectorAll('form');
+
+  forms.forEach(form => {
+    form.addEventListener('submit', function() {
+      const action = form.getAttribute('action');
+
+      // Save scroll position
+      localStorage.setItem('scrollPosition', window.scrollY);
+
+      if (action === '/create_story') {
+        document.getElementById('loading-overlay').style.display = 'flex';
+      } else if (action === '/choose_path') {
+        const lastReaderContainer = document.querySelector('.reader-container');
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'local-loading';
+        loadingDiv.innerHTML = `
+          <div class="loading-spinner"></div>
+          <p style="color: #b3b3b3; font-family: 'Quicksand', sans-serif;">As you wish. Get Ready for more...</p>
+        `;
+        lastReaderContainer.appendChild(loadingDiv);
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }
+    });
+  });
+
+  // Restore scroll position after reload
+  window.addEventListener('load', () => {
+    const savedPosition = localStorage.getItem('scrollPosition');
+    if (savedPosition) {
+      const loadingElement = document.querySelector('.local-loading');
+      const extraOffset = loadingElement ? loadingElement.offsetHeight : 0;
+      const fixedExtra = 100; // adjust if needed
+      window.scrollTo({
+        top: parseInt(savedPosition) + extraOffset + fixedExtra,
+        behavior: 'smooth'
+      });
+    } else if (scrollOnLoad) {
+      // only when loading a saved story
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+    localStorage.removeItem('scrollPosition');
+  });
+</script>
+
+
+<!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+  import { getAuth, setPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+  import { GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+  
+  const firebaseConfig = {
+    apiKey: "AIzaSyCYL9rZTOs2WGV99_jd0knCpRLh_s8eX_0",
+    authDomain: "pickybook.firebaseapp.com",
+    projectId: "pickybook",
+    storageBucket: "pickybook.firebasestorage.app",
+    messagingSenderId: "88924979626",
+    appId: "1:88924979626:web:16bdfcb9a83a8e308bebd3",
+    measurementId: "G-KV2B7XD1QM"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const auth = getAuth(app);
+  // Prevent Firebase from restoring any previous user session
+  setPersistence(auth, inMemoryPersistence).catch(err => console.error('Error setting persistence:', err));
+  window.auth = auth;
+
+  window.signUp = function () {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirm_password").value;
+    if (password !== confirmPassword) {
+      document.getElementById("auth-message").textContent = "Passwords do not match.";
+      return;
+    }
+    const name = document.getElementById("sign_name").value;
+    const birthdate = document.getElementById("sign_birthdate").value;
+    createUserWithEmailAndPassword(auth, email, password)
+      .then((userCredential) => {
+        const user = userCredential.user;
+        return user.getIdToken(/* forceRefresh */ true);
+      })
+      .then((idToken) => {
+        return fetch('/session_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, name, birthdate })
+        });
+      })
+      .then((response) => {
+        if (response.ok) {
+          window.location.reload(); // session now set
+        }
+      })
+      .catch((error) => {
+        document.getElementById("auth-message").textContent = `Error: ${error.message}`;
+      });
+  };
+
+  window.signIn = function () {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    signInWithEmailAndPassword(auth, email, password)
+      .then((userCredential) => {
+        const user = userCredential.user;
+        return user.getIdToken(/* forceRefresh */ true);
+      })
+      
+      .then((idToken) => {
+        return fetch('/session_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+      })
+      .then((response) => {
+        if (response.ok) {
+          window.location.reload(); // session now set
+        }
+      })
+      .catch((error) => {
+        document.getElementById("auth-message").textContent = `Error: ${error.message}`;
+      })
+      .then((idToken) => {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log("Setting timezone:", timeZone);
+        return fetch("/set_timezone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timezone: timeZone })
+        });
+      });
+  };
+
+  window.googleSignIn = function () {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider)
+      .then((result) => {
+        const user = result.user;
+        // Extract Google displayName (may be undefined)
+        const name = user.displayName || "";
+        // Send token to Flask backend, include name
+        return user.getIdToken().then(idToken => ({ idToken, name }));
+      })
+      .then(({ idToken, name }) => {
+        return fetch('/session_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, name })
+        });
+      })
+      .then((response) => {
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          throw new Error("Session login failed.");
+        }
+      })
+      .catch((error) => {
+        document.getElementById("auth-message").textContent = `Google Sign-in Error: ${error.message}`;
+      })
+      .then(() => {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log("Attempting to set timezone:", timeZone);
+        return fetch("/set_timezone", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timezone: timeZone })
+        });
+      });
+  };
+
+  {% if not user %}
+    // If no server session user, ensure Firebase client also signs out
+    signOut(auth).catch(err => console.error('Sign-out error:', err));
+  {% endif %}
+</script>
+
+
+<!-- Reader Display Text size/spacing control and Theme Toggle -->
+<script>
+;(function(){
+  // Restore or initialize theme
+  const savedTheme = localStorage.getItem('readerTheme') || 'dark';
+  if (savedTheme === 'light') {
+    document.body.classList.add('light-theme');
+  }
+  const toggleBtn = document.getElementById('toggle-theme');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      const newTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+      localStorage.setItem('readerTheme', newTheme);
+    });
+  }
+
+  // Select the reader container; exit if not on story page
+  const reader = document.querySelector('.reader-container');
+  if (!reader) return;
+
+  const cfg = {
+    font: { step: 2, min: 12, max: 36 },
+    spacing: { step: 0.1, min: 1.0, max: 2.5 }
+  };
+
+  // Restore saved appearance settings
+  const savedFS = localStorage.getItem('readerFontSize');
+  const savedLH = localStorage.getItem('readerLineHeight');
+  if (savedFS) reader.style.fontSize = savedFS;
+  if (savedLH) reader.style.lineHeight = savedLH;
+
+  // Font size handlers
+  const incFont = document.getElementById('increase-font');
+  const decFont = document.getElementById('decrease-font');
+  if (incFont) incFont.addEventListener('click', () => {
+    let s = parseInt(getComputedStyle(reader).fontSize);
+    if (s < cfg.font.max) {
+      reader.style.fontSize = (s + cfg.font.step) + 'px';
+      document.querySelectorAll('.decision-button').forEach(btn => {
+        btn.style.fontSize = reader.style.fontSize;
+      });
+      localStorage.setItem('readerFontSize', reader.style.fontSize);
+    }
+  });
+  if (decFont) decFont.addEventListener('click', () => {
+    let s = parseInt(getComputedStyle(reader).fontSize);
+    if (s > cfg.font.min) {
+      reader.style.fontSize = (s - cfg.font.step) + 'px';
+      document.querySelectorAll('.decision-button').forEach(btn => {
+        btn.style.fontSize = reader.style.fontSize;
+      });
+      localStorage.setItem('readerFontSize', reader.style.fontSize);
+    }
+  });
+
+  // Line spacing handlers
+  const incSpacing = document.getElementById('increase-spacing');
+  const decSpacing = document.getElementById('decrease-spacing');
+  if (incSpacing) incSpacing.addEventListener('click', () => {
+    const fs = parseFloat(getComputedStyle(reader).fontSize);
+    const lhPx = parseFloat(getComputedStyle(reader).lineHeight);
+    let multiplier = lhPx / fs;
+    if (multiplier < cfg.spacing.max) {
+      multiplier = parseFloat((multiplier + cfg.spacing.step).toFixed(2));
+      reader.style.lineHeight = multiplier;
+      localStorage.setItem('readerLineHeight', reader.style.lineHeight);
+    }
+  });
+  if (decSpacing) decSpacing.addEventListener('click', () => {
+    const fs = parseFloat(getComputedStyle(reader).fontSize);
+    const lhPx = parseFloat(getComputedStyle(reader).lineHeight);
+    let multiplier = lhPx / fs;
+    if (multiplier > cfg.spacing.min) {
+      multiplier = parseFloat((multiplier - cfg.spacing.step).toFixed(2));
+      reader.style.lineHeight = multiplier;
+      localStorage.setItem('readerLineHeight', reader.style.lineHeight);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
