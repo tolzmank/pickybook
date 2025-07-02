@@ -1,3 +1,5 @@
+import logging
+logging.basicConfig(level=logging.INFO)
 
 import os
 import requests
@@ -239,14 +241,6 @@ def account_settings():
         }
         session['user_profile'] = user_profile
     return redirect(url_for('index'))
-    #return render_template('index.html', 
-    #                            show_stories=session.get('show_stories'),
-    #                            show_create=session.get('show_create'),
-    #                            show_account=session.get('show_account'),
-    #                            user=session.get('user'),
-    #                            user_details=session.get('user_details'),
-    #                            user_profile=user_profile
-    #                            )
 
 
 @app.route('/show_create_account', methods=['GET'])
@@ -474,6 +468,7 @@ def save_story_anonymous(story_set):
 
 
 def save_story_db(story_set):
+    logging.info('Saving story to DB...')
     user = session.get('user')
     if story_set:
         key = ds_client.key('Story') 
@@ -501,6 +496,7 @@ def save_story_db(story_set):
             flash("Something went wrong saving your story. Please try again.")
         print('Story saved with ID:', entity.key.id)
         story_id = entity.key.id
+        logging.info('Story saved to DB complete!')
         return story_id
 
 
@@ -525,6 +521,7 @@ def choose_path():
 
 
 def update_story_db(story_id, story_set):
+    logging.info('Updating story in DB...')
     key = ds_client.key('Story', story_id)
     entity = ds_client.get(key)
     if entity:
@@ -536,6 +533,7 @@ def update_story_db(story_id, story_set):
             print("Datastore save failed:", e)
             flash("Something went wrong saving your story. Please try again.")
         print('Story updated with ID:', story_id)
+        logging.info('Story updated with ID:', story_id)
 
 
 @app.route('/start_over', methods=['POST'])
@@ -543,6 +541,18 @@ def start_over():
     story_id = session.get('story_id')
     story_set = get_story(story_id)
     initial_story_block = story_set['story'][0]
+    # Delete all images except the first block's image from GCS
+    try:
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blobs = bucket.list_blobs(prefix=f"stories/{story_id}/")
+        first_image_url = initial_story_block.get('image_url', '')
+        first_image_name = first_image_url.split('/')[-1] if first_image_url else ''
+        for blob in blobs:
+            if not blob.name.endswith(first_image_name):
+                blob.delete()
+                print(f'Deleted image: {blob.name}')
+    except Exception as e:
+        print(f"Error deleting images for start_over: {e}")
     story_set['story'] = [initial_story_block]
     update_story_db(story_id, story_set)
     return redirect(url_for('index'))
@@ -553,6 +563,17 @@ def go_back():
     story_id = session.get('story_id')
     story_set = get_story(story_id)
     last_story_block = story_set['story'][-1]
+    # Delete the image for this block from GCS
+    image_url = last_story_block.get('image_url')
+    if image_url:
+        try:
+            bucket = storage_client.bucket(BUCKET_NAME)
+            blob_name = '/'.join(image_url.split('/')[-3:])  # assumes URL format
+            blob = bucket.blob(blob_name)
+            blob.delete()
+            print(f'Deleted image for last block: {blob_name}')
+        except Exception as e:
+            print(f"Error deleting image for go_back: {e}")
     story_set['story'].remove(last_story_block)
     update_story_db(story_id, story_set)
     return redirect(url_for('index'))
@@ -580,6 +601,14 @@ def delete_story(story_id):
         key = ds_client.key('Story', story_id)
         entity = ds_client.get(key)
         if entity and entity.get('user') == user:
+            # Delete images in storage bucket
+            bucket = storage_client.bucket(BUCKET_NAME)
+            blobs = bucket.list_blobs(prefix=f"stories/{story_id}/")
+            for blob in blobs:
+                blob.delete()
+            print(f'Deleted all images for Story ID: {story_id}')
+
+            # Delete the Datastore entity
             ds_client.delete(key)
             print(f'Story ID: {story_id} deleted')
     return redirect(url_for('my_stories'))
@@ -748,6 +777,7 @@ def map_user_set(story_set):
 
 
 def get_next_story_block(story_set, choice=None):
+    logging.info('GET NEXT STORY BLOCK CALLED')
     userprofile = session.get('user_profile')
     username = ''
     if userprofile:
@@ -913,11 +943,13 @@ def get_next_story_block(story_set, choice=None):
         return story_set
 
     story_set['story'].append(story_block)
+    logging.info('STORY BLOCK CREATED')
     return story_set
 
 
 def get_image_prompt_summary(plot_summary, text_block: str):
     print('Prompting for image...')
+    logging.info('Prompting for image')
 
     prompt = f"""
     This is the next story section of the book: {text_block}
@@ -950,6 +982,7 @@ def get_book_picture(image_prompt: str, story_id):
     Returns a url of the location of the stored image on Google Cloud Bucket
     """
     print('Creating book illustration...')
+    logging.info('Creating book illustration...')
 
     # Send prompt for image
     try:
@@ -982,6 +1015,7 @@ def get_book_picture(image_prompt: str, story_id):
     
     except Exception as e:
         print("ERROR in image generation/storage:", str(e))
+        logging.info('Error in image generation/storage:', str(e))
         return ''
 
 
