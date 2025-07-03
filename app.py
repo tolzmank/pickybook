@@ -289,7 +289,11 @@ def update_account():
     profile['name'] = request.form.get('name', '').strip()
     profile['birthdate'] = request.form.get('birthdate', '').strip()
     profile['reading_level'] = request.form.get('reading_level', '').strip()
-    ds_client.put(profile)
+    try:
+        ds_client.put(profile)
+    except Exception as e:
+        logging.error(f"Datastore put failed: {e}")
+        flash("Something went wrong saving your info. Please try again later.")
     session['user_profile'] = {
         'name': profile['name'],
         'birthdate': profile['birthdate'],
@@ -322,7 +326,7 @@ def session_login():
             ds_client.put(entity)
         except Exception as e:
             print("Datastore save failed:", e)
-            flash("Something went wrong saving your story. Please try again.")
+            flash("Something went wrong saving your info. Please try again later.")
     session['user_profile'] = get_user_profile(user)
     print('LOGIN Requested: ', session['user_profile']['name'])
     session.pop('show_login_form', False)
@@ -405,9 +409,6 @@ def create_story():
         'educational': educational,
         'story': []
     }
-    print('STORY SET: >>>')
-    print(story_set)
-    print()
     story_set = get_next_story_block(story_set, None)
     story_set['title'] = story_set['story'][0]['title']
     del story_set['story'][0]['title']
@@ -418,7 +419,11 @@ def create_story():
         key = ds_client.key('UserProfile', user)
         profile = ds_client.get(key) or datastore.Entity(key=key)
         profile['reading_level'] = reading_level
-        ds_client.put(profile)
+        try:
+            ds_client.put(profile)
+        except Exception as e:
+            logging.error(f"Datastore put failed: {e}")
+            flash("Something went wrong saving your story. Please try again.")
         session['user_profile']['reading_level'] = reading_level
 
     else:
@@ -529,7 +534,11 @@ def choose_path():
 def update_story_db(story_id, story_set):
     #logging.info('Updating story in DB...')
     key = ds_client.key('Story', story_id)
-    entity = ds_client.get(key)
+    try:
+        entity = ds_client.get(key)
+    except Exception as e:
+        logging.error(f"Datastore get failed: {e}")
+        flash("Could not retrieve story. Please try again later.")
     if entity:
         entity['story'] = json.dumps(story_set['story'])
         entity['visual_desc'] = story_set['visual_desc']
@@ -538,7 +547,7 @@ def update_story_db(story_id, story_set):
             ds_client.put(entity)
         except Exception as e:
             print("Datastore save failed:", e)
-            flash("Something went wrong saving your story. Please try again.")
+            flash("Something went wrong saving your story. Please try again later.")
         print('Story updated with ID:', story_id)
 
 
@@ -555,8 +564,12 @@ def start_over():
         first_image_name = first_image_url.split('/')[-1] if first_image_url else ''
         for blob in blobs:
             if not blob.name.endswith(first_image_name):
-                blob.delete()
-                print(f'Deleted image: {blob.name}')
+                try:
+                    blob.delete()
+                    print(f'Deleted image: {blob.name}')
+                except Exception as e:
+                    logging.error(f"Error deleting blob: {e}")
+
     except Exception as e:
         print(f"Error deleting images for start_over: {e}")
     story_set['story'] = [initial_story_block]
@@ -605,7 +618,11 @@ def delete_story(story_id):
     user = session.get('user')
     if story_id:
         key = ds_client.key('Story', story_id)
-        entity = ds_client.get(key)
+        try:
+            entity = ds_client.get(key)
+        except Exception as e:
+            logging.error(f"Datastore get failed: {e}")
+            flash("Could not find story. Please try again later.")
         if entity and entity.get('user') == user:
             # Delete images in storage bucket
             bucket = storage_client.bucket(BUCKET_NAME)
@@ -634,7 +651,11 @@ def get_all_stories_for_user():
 def get_story(story_id):
     user = session.get('user')
     key = ds_client.key('Story', story_id)
-    entity = ds_client.get(key)
+    try:
+        entity = ds_client.get(key)
+    except Exception as e:
+        logging.error(f"Datastore get failed: {e}")
+        flash("Could not find story. Please try again later.")
 
     if entity and entity.get('user') == user:
         story_set = {
@@ -667,7 +688,7 @@ def get_scaled_lengths(story_set):
     reading_level = story_set['reading_level']
     control = story_set['control']
     length = story_set['length']
-    print('SCALED LENGTHS READ LEVEL: >>>>', reading_level)
+
     # Pre-Primer
     if reading_level == 'prek':
         plot_length_map = {
@@ -1092,18 +1113,21 @@ def get_image_prompt_summary(plot_summary, text_block: str, reading_level):
     The cumulative plot story summary for the book so far is {plot_summary}.
     Except for names of characters. Ensure no other text appears in the image itself.
     """.strip()
-
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": STATIC_SYSTEM_INSTRUCTIONS},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3
-    )
-    summary_text = response.choices[0].message.content.strip()
-    print('Summary prompt:', summary_text)
-    return summary_text
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": STATIC_SYSTEM_INSTRUCTIONS},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        summary_text = response.choices[0].message.content.strip()
+        print('Summary prompt:', summary_text)
+        return summary_text
+    except Exception as e:
+        print('Could not get image prompt summary from OpenAI')
+        return ''
 
 
 def get_book_picture(image_prompt: str, story_id, visual_description, reading_level):
@@ -1168,13 +1192,6 @@ def get_book_picture(image_prompt: str, story_id, visual_description, reading_le
         print("ERROR in image generation/storage:", str(e))
         #logging.info('Error in image generation/storage:', str(e))
         return ''
-
-
-
-
-
-
-
 
 
 # Check if prompt violates OpenAI's moderation policies
