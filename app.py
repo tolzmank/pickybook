@@ -405,6 +405,9 @@ def create_story():
         'educational': educational,
         'story': []
     }
+    print('STORY SET: >>>')
+    print(story_set)
+    print()
     story_set = get_next_story_block(story_set, None)
     story_set['title'] = story_set['story'][0]['title']
     del story_set['story'][0]['title']
@@ -424,10 +427,10 @@ def create_story():
 
     # Get image for story block, add to story block
     story_block = story_set['story'][-1]
-    plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'])
-    visual_desc_anchor = get_visual_description_anchor(story_block['text'])
+    plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'], reading_level)
+    visual_desc_anchor = get_visual_description_anchor(story_block['text'], reading_level)
     story_set['visual_desc'] = visual_desc_anchor
-    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor)
+    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor, reading_level)
     update_story_db(story_id, story_set)
 
     session['story_id'] = story_id
@@ -470,7 +473,7 @@ def save_story_anonymous(story_set):
 
 
 def save_story_db(story_set):
-    logging.info('Saving story to DB...')
+    #logging.info('Saving story to DB...')
     user = session.get('user')
     if story_set:
         key = ds_client.key('Story') 
@@ -498,7 +501,7 @@ def save_story_db(story_set):
             flash("Something went wrong saving your story. Please try again.")
         print('Story saved with ID:', entity.key.id)
         story_id = entity.key.id
-        logging.info('Story saved to DB complete!')
+        #logging.info('Story saved to DB complete!')
         return story_id
 
 
@@ -515,16 +518,16 @@ def choose_path():
 
     # Get image for story block
     story_block = story_set['story'][-1]
-    plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'])
+    plot_block_summary = get_image_prompt_summary(story_block['summary'], story_block['text'], story_set['reading_level'])
     visual_desc_anchor = story_set['visual_desc']
-    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor)
+    story_block['image_url'] = get_book_picture(plot_block_summary, story_id, visual_desc_anchor, story_set['reading_level'])
 
     update_story_db(story_id, story_set)
     return redirect(url_for('index'))
 
 
 def update_story_db(story_id, story_set):
-    logging.info('Updating story in DB...')
+    #logging.info('Updating story in DB...')
     key = ds_client.key('Story', story_id)
     entity = ds_client.get(key)
     if entity:
@@ -664,8 +667,24 @@ def get_scaled_lengths(story_set):
     reading_level = story_set['reading_level']
     control = story_set['control']
     length = story_set['length']
+    print('SCALED LENGTHS READ LEVEL: >>>>', reading_level)
+    # Pre-Primer
+    if reading_level == 'prek':
+        plot_length_map = {
+            'quicky': 40,
+            'novella': 60,
+            'novel': 80,
+            'epic': 100
+        }
+        control_map = {
+            'low': 12,
+            'medium': 8,
+            'high': 6
+        }
+        text_unit = 'words'
+
     # Kindergarten
-    if reading_level == 'k':
+    elif reading_level == 'k':
         plot_length_map = {
             'quicky': 15,
             'novella': 30,
@@ -708,6 +727,8 @@ def get_scaled_lengths(story_set):
             'high': 3
         }
         text_unit = 'sentences'
+
+    # All other grade levels
     else:
         plot_length_map = {
             'quicky': 20,
@@ -783,7 +804,8 @@ def map_user_set(story_set):
 
     # Reading level map
     reading_level_map = {
-        'k': 'Kindergarten reading level',
+        'prek': 'Pre-Primer reading level. Use sight words and keep sentences short and repetitive.',
+        'k': 'Kindergarten reading level. Use sight words and keep sentences short and repetitive.',
         '1': '1st grade reading level',
         '2': '2nd grade reading level',
         '3': '3rd grade reading level',
@@ -840,7 +862,7 @@ def map_user_set(story_set):
 
 
 def get_next_story_block(story_set, choice=None):
-    logging.info('GET NEXT STORY BLOCK CALLED')
+    #logging.info('GET NEXT STORY BLOCK CALLED')
     userprofile = session.get('user_profile')
     username = ''
     if userprofile:
@@ -858,6 +880,12 @@ def get_next_story_block(story_set, choice=None):
     reading_level = user_set['reading_level']
     educational = user_set['educational']
     text_unit = user_set['text_unit']
+
+    levels = ['prek', 'k', '1', '2']
+    if story_set['reading_level'] in levels:
+        parent_read = '- Make the story also be interesting and engaging to an adult parent of the child who is reading the story to the child. This includes adding some "easter-egg" style references that only a parent will notice.'
+    else:
+        parent_read = ''
 
     plot_blocks = story_set.get('story')
     if plot_blocks:
@@ -953,14 +981,16 @@ def get_next_story_block(story_set, choice=None):
         You are an creative and interactive “choose-your-own-adventure” style book author for children.
         
         Always follow these rules:
-        - Keep the vocabulary, dolch words list, and lexile score at a {reading_level}.
+        - Use mostly Dolch words for a {reading_level}.
+        - Keep the overall Lexile score within the typical range for a {reading_level}.
         - Set the content of the story to appeal to a child who is {reader_age}.
         - Use a {vibe_mood} tone.
         - Follow the genre: {genre}.
         - The main character is {main_character}.
         - {moral_lesson}
         - {educational}
-        
+        {parent_read}
+
         • Never mention, foreshadow, or allude to decision points or branching paths in the narrative itself;  
         all branching lives strictly in the `"choices"` array.
 
@@ -1007,16 +1037,23 @@ def get_next_story_block(story_set, choice=None):
         return story_set
 
     story_set['story'].append(story_block)
-    logging.info('STORY BLOCK CREATED')
+    #logging.info('STORY BLOCK CREATED')
     return story_set
 
 
-def get_visual_description_anchor(full_text):
+def get_visual_description_anchor(full_text, reading_level):
+    levels = ['prek', 'k']
+    if reading_level in levels:
+        illustration_style = "Describe the visual descriptions ultra simply so they can be drawn in a very simple, flat cartoon style for preschool kids. Bright solid colors only, and absolutely no shading, gradients, or texture descriptions. The description should resemble like clip-art for a preschool picture book: friendly, clear shapes, plain white or pastel background, no background details, no extra visual clutter. Characters should have big simple faces, clear emotions, and easy to recognize shapes."
+    else:
+        illustration_style = ""
+
     prompt = f"""
     Analyze this first story block:
     \"\"\"{full_text}\"\"\"
     Based on the main character and important visual elements such as accessories or other characters or sidekicks, create a single, clear, short visual description that can be reused for every illustration in the book to keep characters and details consistent.
     Include important details about the main character and any other characters like age, height, sex/gender, skin color, hair color, hair style/length, and eye color. 
+    {illustration_style}
     """
     try:
         response = openai_client.chat.completions.create(
@@ -1034,14 +1071,20 @@ def get_visual_description_anchor(full_text):
         return ''
 
 
-def get_image_prompt_summary(plot_summary, text_block: str):
+def get_image_prompt_summary(plot_summary, text_block: str, reading_level):
     print('Prompting for image...')
-    logging.info('Prompting for image')
+    #logging.info('Prompting for image')
+    levels = ['prek', 'k']
+    if reading_level in levels:
+        illustration_style = "Describe the scene so it can be drawn in a very simple, flat cartoon style for preschool kids. Bright solid colors only, and absolutely no shading, gradients, or texture descriptions. The description should resemble like clip-art for a preschool picture book: friendly, clear shapes, plain white or pastel background, no background details, no extra visual clutter. Characters should have big simple faces, clear emotions, and easy to recognize shapes."
+    else:
+        illustration_style = ""
 
     prompt = f"""
     This is the next story section of the book: {text_block}
     Create a concise, clear prompt that could be used to illustrate these particular scenes/events in this story section for kids.
     Include as detailed visual descriptions to keep the prompt describing the current scene well while keeping the details consistent from the cumulative plot story summary.
+    {illustration_style}
     """.strip()
 
     STATIC_SYSTEM_INSTRUCTIONS = f"""
@@ -1063,18 +1106,27 @@ def get_image_prompt_summary(plot_summary, text_block: str):
     return summary_text
 
 
-def get_book_picture(image_prompt: str, story_id, visual_description):
+def get_book_picture(image_prompt: str, story_id, visual_description, reading_level):
     """
     Receives summary of story block as an image prompt format
     Returns a url of the location of the stored image on Google Cloud Bucket
     """
     print('Creating book illustration...')
-    logging.info('Creating book illustration...')
+    #logging.info('Creating book illustration...')
     print()
     print('IMAGE PROMPT: ', image_prompt)
     print()
     print('VISUAL DESC: ', visual_description)
     print()
+
+    levels = ['prek', 'k']
+    if reading_level in levels:
+        print('Pre-k to K grade style illustrations')
+        illustration_style = "Draw in a very simple, flat cartoon style for preschool kids. Use clear bold outlines, bright solid colors only, and absolutely no shading, gradients, or textures. The drawing should look like clip-art for a preschool picture book: friendly, clear shapes, plain white or pastel background, no background details, no extra visual clutter. Characters should have big simple faces, clear emotions, and easy to recognize shapes."
+    else:
+        print('1st grade and above illustrations')
+        illustration_style = "A watercolor style, colorful, kid-friendly children's book cartoon illustration:"
+
     # Send prompt for image
     try:
         image_response = openai_client.images.generate(
@@ -1084,9 +1136,9 @@ def get_book_picture(image_prompt: str, story_id, visual_description):
             \"{visual_description}\"
 
             Scene to illustrate:
-            A watercolor style, cartoon, colorful, kid-friendly children's book illustration: {image_prompt}.
+            {illustration_style} {image_prompt}.
 
-            Combine both: The final illustration must match the anchor details and bring the scene to life.
+            Combine both: The final illustration must match the anchor details and depict the scene in the story.
             """,
             n=1,
             size="1024x1024"
@@ -1114,7 +1166,7 @@ def get_book_picture(image_prompt: str, story_id, visual_description):
     
     except Exception as e:
         print("ERROR in image generation/storage:", str(e))
-        logging.info('Error in image generation/storage:', str(e))
+        #logging.info('Error in image generation/storage:', str(e))
         return ''
 
 
