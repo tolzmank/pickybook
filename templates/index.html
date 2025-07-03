@@ -413,17 +413,17 @@
 <!-- Story Navigation Buttons -->
 <div class="decision-row">
   <form method="POST" action="/go_back">
-    <button class="button-gray" type="submit" title="Go back one step in your story">
+    <button class="button-gray" type="submit" title="Go back one choice in your story">
       <img src="{{ url_for('static', filename='icons/back.svg') }}" alt="Go Back" style="height: 30px;">
     </button>
   </form>
   <form method="POST" action="/start_over">
-    <button class="button-gray" type="submit" title="Restart from the beginning with the same setup">
+    <button class="button-gray" type="submit" title="Restart story from the beginning">
       <img src="{{ url_for('static', filename='icons/start_over.svg') }}" alt="Start Over" style="height: 30px;">
     </button>
   </form>
   <form method="POST" action="/reset">
-    <button class="button-gray" type="submit" title="Clear everything and begin a brand new story">
+    <button class="button-gray" type="submit" title="Save current story and begin a brand new story">
       <img src="{{ url_for('static', filename='icons/close.svg') }}" alt="Reset" style="height: 30px;">
     </button>
   </form>

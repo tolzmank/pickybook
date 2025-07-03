@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Oops! Something went wrong</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body style="text-align: center; margin-top: 50px;">
+    <img src="{{ url_for('static', filename='images/elephant_sad.png') }}" alt="Sad Elephant" style="height: 150px;">
+    <h3>Oops! Something went wrong.</h3>
+    <p>We're sorry, but an unexpected error occurred.<br>
+       Please try again or return home.</p>
+    <button class="button" style="margin-right: 10px;" onclick="location.href='/'" title="Back to PickyBook Home">Back to PickyBook Home</button>
+</body>
+</html>

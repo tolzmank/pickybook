@@ -1136,7 +1136,6 @@ def get_book_picture(image_prompt: str, story_id, visual_description, reading_le
     Returns a url of the location of the stored image on Google Cloud Bucket
     """
     print('Creating book illustration...')
-    #logging.info('Creating book illustration...')
     print()
     print('IMAGE PROMPT: ', image_prompt)
     print()
@@ -1177,9 +1176,9 @@ def get_book_picture(image_prompt: str, story_id, visual_description, reading_le
 
         img_bytes = io.BytesIO(response.content)
         if not img_bytes:
-            print('IMG BYTES IS NONE')
+            print('OpenAI Failed to generate image')
         else:
-            print('IMG IS GENERATED')
+            print('OpenAI Image Creation success')
         # Upload image to GCS Bucket
         bucket = storage_client.bucket(BUCKET_NAME)
         unique_id = uuid.uuid4().hex
@@ -1192,6 +1191,18 @@ def get_book_picture(image_prompt: str, story_id, visual_description, reading_le
         print("ERROR in image generation/storage:", str(e))
         #logging.info('Error in image generation/storage:', str(e))
         return ''
+    
+
+@app.errorhandler(500)
+def internal_error(error):
+    logging.exception(f"Internal server error: {error}")
+    return render_template('500.html'), 500
+
+
+@app.errorhandler(404)
+def not_found_error(error):
+    logging.warning(f"Page not found: {error}")
+    return render_template('404.html'), 404
 
 
 # Check if prompt violates OpenAI's moderation policies
@@ -1209,13 +1220,29 @@ def check_moderation(input_text: str):
 # cron handler to remove non registered account user's stories from database (triggered daily)
 @app.route('/cron/cleanup_anonymous', methods=['GET'])
 def cleanup_anonymous():
+    """Delete anonymous stories older than 30 days and associated images."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    q = ds_client.query(kind='Story')
-    q.add_filter('user', '=', None)
-    q.add_filter('created_at', '<', cutoff)
-    keys = [e.key for e in q.fetch()]
-    if keys:
-        ds_client.delete_multi(keys)
+    query = ds_client.query(kind='Story')
+    query.add_filter('anon_id', '!=', None)
+    query.add_filter('created_at', '<', cutoff)
+    expired = list(query.fetch())
+
+    bucket = storage_client.bucket(BUCKET_NAME)
+
+    for entity in expired:
+        story_id = entity.key.id
+
+        # Delete images for this story
+        blobs = bucket.list_blobs(prefix=f"stories/{story_id}/")
+        for blob in blobs:
+            blob.delete()
+            print(f"Deleted blob: {blob.name}")
+
+        # Delete the Datastore entity
+        ds_client.delete(entity.key)
+        print(f"Deleted expired anon story ID: {story_id}")
+
+    print(f"Total expired anon stories cleaned: {len(expired)}")
     return ('', 204)
 
 
